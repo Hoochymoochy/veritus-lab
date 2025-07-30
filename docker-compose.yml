@@ -53,6 +53,21 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+  
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: orchestrator
+    ports:
+      - "4000:4000"
+    depends_on:
+      embedder:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+
 
 networks:
   app-network:

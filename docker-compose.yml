@@ -1,14 +1,28 @@
+version: "3.9"
+
 services:
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
     container_name: ollama_model
     ports:
       - "11434:11434"
     restart: unless-stopped
-  
-  embeddd:
+    networks:
+      - app-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  embedder:
     build:
-      context: ./services/embeddd
+      context: ./services/embedder
       dockerfile: Dockerfile
     container_name: nomic_embed
     env_file:
@@ -16,5 +30,30 @@ services:
     ports:
       - "11500:11500"
     depends_on:
-      - ollama  # not embedder
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_URL=http://ollama:11434
     restart: unless-stopped
+    networks:
+      - app-network
+
+  summarizer:
+    build:
+      context: ./services/summarizer
+      dockerfile: Dockerfile
+    container_name: summarizer
+    env_file:
+      - .env
+    ports:
+      - "11600:11600"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

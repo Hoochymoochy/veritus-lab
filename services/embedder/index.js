@@ -26,13 +26,13 @@ if (!process.env.PINECONE_INDEX) {
   console.error('❌ PINECONE_INDEX is not set in environment variables');
   process.exit(1);
 }
-
+console.log(process.env.OLLAMA_URL)
 // 🔐 Pinecone init
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const index = pinecone.index(process.env.PINECONE_INDEX);
 
 async function embedText(text) {
-  const ollamaUrl = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
+  const ollamaUrl = process.env.OLLAMA_URL || 'http://ollama_model:11434';
   const response = await axios.post(`${ollamaUrl}/api/embeddings`, {
     model: 'nomic-embed-text',
     prompt: text
@@ -41,48 +41,48 @@ async function embedText(text) {
 }
 
 app.post('/search', async (req, res) => {
+  const { query, namespace } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Query is required' });
+  }
+
+  let queryVector;
   try {
-    const { query, topK = 5, namespace = "" } = req.body;
-
-    if (!query) {
-      return res.status(400).json({ error: 'Query is required' });
-    }
-
-    // Step 1: Embed the query
-    const ollamaUrl = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
+    const ollamaUrl = process.env.OLLAMA_URL || 'http://ollama_model:11434';
     const embedRes = await axios.post(`${ollamaUrl}/api/embeddings`, {
       model: 'nomic-embed-text',
       prompt: query
     });
+    queryVector = embedRes.data.embedding;
+  } catch (embedErr) {
+    console.error('Embedding error:', embedErr.message);
+    return res.status(500).json({ error: 'Failed to generate embeddings', details: embedErr.message });
+  }
 
-    const queryVector = embedRes.data.embedding;
-
-    // Step 2: Query Pinecone
+  try {
     const queryRequest = {
-      topK,
       vector: queryVector,
       includeMetadata: true,
       includeValues: false,
+      topK: 5,
     };
-
-    // Only add namespace if it's not empty
     if (namespace) {
       queryRequest.namespace = namespace;
     }
-
     const result = await index.query(queryRequest);
-
     const matches = result.matches.map(match => ({
       score: match.score,
       ...match.metadata,
     }));
-
-    res.json(matches);
-  } catch (err) {
-    console.error('Search error:', err.message);
-    res.status(500).json({ error: 'Search failed', details: err.message });
+    return res.json(matches);
+  } catch (pineconeErr) {
+    console.error('Pinecone query error:', pineconeErr.message);
+    return res.status(500).json({ error: 'Failed to query vector database', details: pineconeErr.message });
   }
 });
+
+
 
 app.post('/embed', async (req, res) => {
   try {

@@ -1,0 +1,32 @@
+FROM debian:bullseye
+
+# Install curl and other necessary packages
+RUN apt-get update && \
+    apt-get install -y curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Create a script to download the model
+RUN echo '#!/bin/bash\n\
+ollama serve &\n\
+OLLAMA_PID=$!\n\
+echo "Waiting for Ollama to start..."\n\
+sleep 10\n\
+echo "Downloading nomic-embed-text model..."\n\
+ollama pull nomic-embed-text\n\
+echo "Model downloaded successfully"\n\
+kill $OLLAMA_PID\n\
+wait $OLLAMA_PID 2>/dev/null\n\
+echo "Ollama stopped"' > /tmp/download_model.sh && \
+    chmod +x /tmp/download_model.sh
+
+# Download the model
+RUN /tmp/download_model.sh && rm /tmp/download_model.sh
+
+# Expose the port Ollama listens on
+EXPOSE 11434
+
+# Start the Ollama server when the container starts
+CMD ["ollama", "serve"]

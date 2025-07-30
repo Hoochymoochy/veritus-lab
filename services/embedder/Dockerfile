@@ -2,10 +2,11 @@ FROM node:18
 
 WORKDIR /app
 
-COPY . .
-
+COPY package*.json ./
 RUN npm install
+
+COPY . .
 
 EXPOSE 11500
 
-CMD ["node", "embedd.js"]
+CMD ["node", "index.js"]

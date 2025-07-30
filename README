@@ -1,0 +1,7 @@
+docker compose down
+docker compose build
+docker compose up -d
+
+
+docker-compose build --no-cache embedder
+docker-compose up -d embedder

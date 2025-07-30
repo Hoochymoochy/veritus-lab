@@ -6,24 +6,25 @@ const app = express()
 app.use(express.json())
 
 app.post('/ask', async (req, res) => {
-  const { question } = req.body
+  const { query } = req.body
 
   // 1. Embed + retrieve
-  const chunks = await axios.post('http://localhost:5050/embed', { question })
+  const chunks = await axios.post('http://localhost:11500/search', { query })
 
   // 2. Summarize chunks
-  const summary = await axios.post('http://localhost:5051/summarize', { chunks })
+  // const summary = await axios.post('http://localhost:11600/summarize-batch', { chunks })
+  
 
   // 3. Main answer from LLM
-  const answer = await axios.post('http://localhost:5052/ask', { summary, question })
+  // const answer = await axios.post('http://localhost:5052/ask', { summary, question })
 
-  // 4. Verify answer
-  const verified = await axios.post('http://localhost:5053/verify', { answer })
+  // // 4. Verify answer
+  // const verified = await axios.post('http://localhost:5053/verify', { answer })
 
-  // 5. Translate/simplify
-  const final = await axios.post('http://localhost:5054/explain', { text: verified })
+  // // 5. Translate/simplify
+  // const final = await axios.post('http://localhost:5054/explain', { text: verified })
 
-  res.json({ final })
+  res.json({ chunks })
 })
 
 app.listen(4000, () => console.log('🧠 Veritus-Lab orchestrator on port 4000'))

@@ -8,25 +8,60 @@ RUN apt-get update && \
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Create a script to download the model
+# Create entrypoint script that handles model downloading
 RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# Start Ollama in background\n\
 ollama serve &\n\
 OLLAMA_PID=$!\n\
-echo "Waiting for Ollama to start..."\n\
-sleep 10\n\
-echo "Downloading nomic-embed-text model..."\n\
-ollama pull nomic-embed-text\n\
-echo "Model downloaded successfully"\n\
-kill $OLLAMA_PID\n\
-wait $OLLAMA_PID 2>/dev/null\n\
-echo "Ollama stopped"' > /tmp/download_model.sh && \
-    chmod +x /tmp/download_model.sh
-
-# Download the model
-RUN /tmp/download_model.sh && rm /tmp/download_model.sh
+\n\
+# Function to check if Ollama is ready\n\
+wait_for_ollama() {\n\
+    echo "Waiting for Ollama to be ready..."\n\
+    for i in {1..30}; do\n\
+        if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then\n\
+            echo "Ollama is ready!"\n\
+            return 0\n\
+        fi\n\
+        echo "Attempt $i/30: Ollama not ready yet, waiting..."\n\
+        sleep 2\n\
+    done\n\
+    echo "Ollama failed to start within 60 seconds"\n\
+    return 1\n\
+}\n\
+\n\
+# Function to download model if not exists\n\
+download_model_if_needed() {\n\
+    local model=$1\n\
+    echo "Checking if model $model exists..."\n\
+    if ! ollama list | grep -q "$model"; then\n\
+        echo "Downloading $model..."\n\
+        ollama pull "$model"\n\
+        echo "Successfully downloaded $model"\n\
+    else\n\
+        echo "Model $model already exists, skipping download"\n\
+    fi\n\
+}\n\
+\n\
+# Wait for Ollama to be ready\n\
+if ! wait_for_ollama; then\n\
+    echo "Failed to start Ollama"\n\
+    exit 1\n\
+fi\n\
+\n\
+# Download models\n\
+download_model_if_needed "nomic-embed-text"\n\
+download_model_if_needed "mistral"\n\
+\n\
+echo "All models ready. Ollama is running on port 11434"\n\
+\n\
+# Keep Ollama running in foreground\n\
+wait $OLLAMA_PID' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 # Expose the port Ollama listens on
 EXPOSE 11434
 
-# Start the Ollama server when the container starts
-CMD ["ollama", "serve"]
+# Use the entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]

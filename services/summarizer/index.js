@@ -18,15 +18,15 @@ const summarizeText = async (text) => {
 };
 
 app.post('/summarize-batch', async (req, res) => {
-  const { items } = req.body;
+  const { chunks } = req.body;
 
-  if (!Array.isArray(items)) {
+  if (!Array.isArray(chunks)) {
     return res.status(400).json({ error: 'Expected "items" to be an array' });
   }
 
   try {
     const summaries = await Promise.all(
-      items.map(async (item) => {
+      chunks.map(async (item) => {
         const summary = await summarizeText(item.raw_text || '');
         return {
           item_id: item.item_id,

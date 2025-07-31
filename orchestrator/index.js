@@ -27,10 +27,10 @@ app.post('/ask', async (req, res) => {
     console.log('📝 Summary Complete')
 
     // 3. 🤖 Ask LLM (optional – uncomment when ready)
-    // const { data: answerResult } = await axios.post('http://llm:5052/ask', {
-    //   summary: summaryResult,
-    //   question: query
-    // })
+    const { data: answerResult } = await axios.post('http://qa:11700/final-response', {
+      chunks,
+      question: query
+    })
 
     // 4. ✅ Verify Answer (optional)
     // const { data: verifiedResult } = await axios.post('http://verifier:5053/verify', {
@@ -43,7 +43,7 @@ app.post('/ask', async (req, res) => {
     // })
 
     res.json({
-      summary: summaryResult,
+      summary: answerResult,
       // answer: answerResult,
       // verified: verifiedResult,
       // final: finalResult

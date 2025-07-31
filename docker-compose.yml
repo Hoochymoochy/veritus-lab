@@ -53,6 +53,22 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+    
+  qa:
+    build:
+      context: ./services/qa
+      dockerfile: Dockerfile
+    container_name: qa
+    env_file:
+      - .env
+    ports:
+      - "11700:11700"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
   
   orchestrator:
     build:

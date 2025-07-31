@@ -53,6 +53,7 @@ fi\n\
 # Download models\n\
 download_model_if_needed "nomic-embed-text"\n\
 download_model_if_needed "mistral"\n\
+download_model_if_needed "phi3"\n\
 \n\
 echo "All models ready. Ollama is running on port 11434"\n\
 \n\

@@ -11,4 +11,4 @@ By accessing or using Veritus in any way, you agree not to reproduce, republish,
 Unauthorized use or misuse may result in legal action.
 
 For licensing inquiries or access requests, contact:  
-**khaydenroberts@gmail.com**
+**khaydenroberts22@gmail.com**

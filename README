@@ -1,7 +1,128 @@
-docker compose down
-docker compose build
-docker compose up -d
+# Veritus — AI You Can Swear By ⚖️  
+**A high-trust, citation-backed legal AI assistant.**  
+**Tagline:** *AI You Can Swear By*  
+**Website:** [Coming Soon]  
+**Status:** In active development (Capstone 2025)
 
+---
 
-docker-compose build --no-cache embedder
-docker-compose up -d embedder
+## 📚 Overview
+
+Veritus is a legal AI assistant designed for accuracy, transparency, and jurisdiction-specific insight. Built to assist lawyers, students, and legal researchers, Veritus delivers citation-backed legal information without hallucinations. 
+
+Its hybrid architecture combines retrieval-augmented generation (RAG), structured legal databases, and a luxury-grade frontend experience — all to provide AI that’s not only smart, but reliable and trustworthy.
+
+---
+
+## 💼 Core Use Cases
+
+- Fast lookup of jurisdiction-specific laws with citations  
+- Summarizing and analyzing legal documents  
+- Comparing statutes across states and regions  
+- Assisting law students with coursework and research  
+- Enhancing law firm efficiency with verifiable AI tools
+
+---
+
+## 🧠 Architecture Overview
+
++---------------+ +--------------------+
+| Frontend | <----> | API (RAG Engine) |
++---------------+ +--------------------+
+| |
+v v
++---------------+ +----------------------+
+| Vector Store | | Legal Text Database |
+| (e.g., Qdrant)| | (e.g., GovInfo, |
+| | | CourtListener, ...)|
++---------------+ +----------------------+
+
+yaml
+Copy
+Edit
+
+---
+
+## 🛠 Tech Stack
+
+### Backend  
+- **Language:** Python  
+- **Framework:** FastAPI or Node.js (WIP)  
+- **Vector DB:** Qdrant / Weaviate  
+- **Text DB:** PostgreSQL  
+- **Search:** Custom RAG pipeline  
+- **Data Sources:** GovInfo, CourtListener, state legislature APIs  
+- **Prompting:** LangChain / LlamaIndex (RAG architecture)
+
+### Frontend  
+- **Framework:** Next.js or Phoenix LiveView  
+- **Styling:** Tailwind CSS (dark theme)  
+- **Components:** shadcn/ui  
+- **Languages:** TypeScript + Markdown rendering
+
+---
+
+## 🔒 Trust & Safety
+
+Veritus includes several safeguards to ensure output quality:
+
+- ✅ Citations for every legal reference  
+- 🧭 Jurisdiction filters (e.g., US federal, Maranhão state law)  
+- 🔐 No hallucinated cases or statutes  
+- 📉 Confidence thresholds + fallback prompts  
+- 📂 Document upload with clear annotations
+
+---
+
+## 🚧 Capstone Timeline (2025)
+
+### **August**
+- Import Brazilian federal + Maranhão state law
+- Localize interface (Portuguese)
+- Start legal student testing (São Luís)
+
+### **September**
+- Responsive dark UI + mobile version
+- Add usage tracking + anonymized logs
+
+### **October**
+- Add document analysis
+- Add jurisdiction selector + filters
+- User mode toggle: “Student” vs “Lawyer”
+
+### **November**
+- Record live demo (Portuguese + English)
+- Create pitch page + teaser content
+
+### **December (Capstone Delivery)**
+- Final presentation with demo + metrics
+- Capstone report: tech, design, legal value
+
+---
+
+## 📈 Future Roadmap
+
+- [ ] US law coverage + state comparison  
+- [ ] Web dashboard for law firms  
+- [ ] API access for legaltech platforms  
+- [ ] Real-time court update integration  
+- [ ] Veritus Pro: AI legal memo generation
+
+---
+
+## 📄 License
+
+Veritus is currently under a private license during capstone development. Open-source portions may be released later under the MIT License.
+
+---
+
+## 🤝 Get Involved
+
+Interested in contributing, testing, or collaborating on Veritus?
+
+Reach out via [LinkedIn](https://www.linkedin.com/in/khaydenroberts) or email: **khaydenroberts@gmail.com**
+
+---
+
+> “When the stakes are high, your AI should be airtight.”  
+> — The Veritus Principle

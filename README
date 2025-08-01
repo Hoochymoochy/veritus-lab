@@ -42,84 +42,67 @@ Think:
 +----------------+       +-----------------------+
 
 
-## 🛠 Tech Stack
+🛠 Tech Stack
+🧩 Backend
+Language: Python
 
-### Backend  
-- **Language:** Python  
-- **Framework:** FastAPI or Node.js (WIP)  
-- **Vector DB:** Qdrant / Weaviate  
-- **Text DB:** PostgreSQL  
-- **Search:** Custom RAG pipeline  
-- **Data Sources:** GovInfo, CourtListener, state legislature APIs  
-- **Prompting:** LangChain / LlamaIndex (RAG architecture)
+Framework: FastAPI or Node.js (WIP)
 
-### Frontend  
-- **Framework:** Next.js or Phoenix LiveView  
-- **Styling:** Tailwind CSS (dark theme)  
-- **Components:** shadcn/ui  
-- **Languages:** TypeScript + Markdown rendering
+Vector DB: Qdrant / Weaviate
 
----
+Text DB: PostgreSQL
 
-## 🔒 Trust & Safety
+RAG Framework: LangChain / LlamaIndex
 
-Veritus includes several safeguards to ensure output quality:
+Legal Sources: GovInfo, CourtListener, state APIs
 
-- ✅ Citations for every legal reference  
-- 🧭 Jurisdiction filters (e.g., US federal, Maranhão state law)  
-- 🔐 No hallucinated cases or statutes  
-- 📉 Confidence thresholds + fallback prompts  
-- 📂 Document upload with clear annotations
+🎨 Frontend
+Framework: Next.js or Phoenix LiveView
 
----
+Styling: Tailwind CSS (Dark UI)
 
-## 🚧 Capstone Timeline (2025)
+UI Kit: shadcn/ui
 
-### **August**
-- Import Brazilian federal + Maranhão state law
-- Localize interface (Portuguese)
-- Start legal student testing (São Luís)
+Languages: TypeScript + Markdown
 
-### **September**
-- Responsive dark UI + mobile version
-- Add usage tracking + anonymized logs
+🔒 Trust & Safety Features
+✅ Real Citations on every claim
 
-### **October**
-- Add document analysis
-- Add jurisdiction selector + filters
-- User mode toggle: “Student” vs “Lawyer”
+🧭 Jurisdiction Filters (e.g., US, Maranhão)
 
-### **November**
-- Record live demo (Portuguese + English)
-- Create pitch page + teaser content
+❌ No Hallucinations (we reject fake case law)
 
-### **December (Capstone Delivery)**
-- Final presentation with demo + metrics
-- Capstone report: tech, design, legal value
+📉 Confidence Thresholds + smart fallbacks
 
----
+📂 Document Uploads with clear AI annotations
 
-## 📈 Future Roadmap
+🗓 Capstone Timeline — 2025
+Month	Milestones
+Aug	🇧🇷 Import BR laws (federal + Maranhão) • Portuguese UI • Student pilot
+Sept	📱 Mobile UI • 🌓 Dark theme polish • 🧪 Usage tracking
+Oct	📄 Document analysis • ⚖️ Jurisdiction selector • 👤 Student vs Lawyer modes
+Nov	🎥 Record demos (PT + EN) • 📣 Pitch page + teaser assets
+Dec	🚀 Capstone presentation • 📊 Metrics • 📖 Final report
 
-- [ ] US law coverage + state comparison  
-- [ ] Web dashboard for law firms  
-- [ ] API access for legaltech platforms  
-- [ ] Real-time court update integration  
-- [ ] Veritus Pro: AI legal memo generation
+🔮 Future Roadmap
+ 🇺🇸 Add U.S. state law + comparisons
 
----
+ 🧑‍💼 Web dashboard for law firms
 
-## 📄 License
+ 🔌 API access for legaltech platforms
 
-Veritus is currently under a private license during capstone development. Open-source portions may be released later under the MIT License.
+ 🏛️ Real-time court data integrations
 
----
+ 📑 Veritus Pro: Legal Memo Generator
 
-## 🤝 Get Involved
+📄 License
+Currently under private license during development.
+Select components may be released later under the MIT License.
 
-Interested in contributing, testing, or collaborating on Veritus?
+🤝 Let’s Connect
+Interested in contributing, testing, or collaborating?
 
-Reach out via [LinkedIn](https://www.linkedin.com/in/khaydenroberts) or email: **khaydenroberts@gmail.com**
+Reach out via [LinkedIn](https://www.linkedin.com/in/khayden-roberts-5783b32b5/) or email: **khaydenroberts22@gmail.com**
 
 ---
 

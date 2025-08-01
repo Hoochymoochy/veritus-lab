@@ -1,47 +1,46 @@
-# Veritus — AI You Can Swear By ⚖️  
-**A high-trust, citation-backed legal AI assistant.**  
-**Tagline:** *AI You Can Swear By*  
+# ⚖️ Veritus — *AI You Can Swear By*
+
+**High-trust, citation-backed legal AI. Built for lawyers, students, and researchers who demand airtight answers.**  
+**Status:** 🟡 In Active Development (Capstone 2025)  
 **Website:** [Coming Soon]  
-**Status:** In active development (Capstone 2025)
 
 ---
 
 ## 📚 Overview
 
-Veritus is a legal AI assistant designed for accuracy, transparency, and jurisdiction-specific insight. Built to assist lawyers, students, and legal researchers, Veritus delivers citation-backed legal information without hallucinations. 
+**Veritus** is a next-gen legal assistant that delivers **jurisdiction-specific**, **citation-backed** legal insights without the fluff.  
+No hallucinations. No hand-waving. Just straight-up legal intelligence.
 
-Its hybrid architecture combines retrieval-augmented generation (RAG), structured legal databases, and a luxury-grade frontend experience — all to provide AI that’s not only smart, but reliable and trustworthy.
+Think:  
+> 🧠 RAG-augmented brain  
+> 🏛️ Real legal data  
+> 💎 Luxury-grade UX  
 
 ---
 
 ## 💼 Core Use Cases
 
-- Fast lookup of jurisdiction-specific laws with citations  
-- Summarizing and analyzing legal documents  
-- Comparing statutes across states and regions  
-- Assisting law students with coursework and research  
-- Enhancing law firm efficiency with verifiable AI tools
+- ⚖️ Lookup laws by jurisdiction with real citations  
+- 📄 Summarize and analyze legal documents  
+- 🌍 Compare statutes across U.S. states & Brazilian law  
+- 🎓 Assist law students with coursework + research  
+- 🏢 Boost law firm workflows with verifiable AI tools  
 
 ---
 
-## 🧠 Architecture Overview
+## 🧠 Architecture
 
-+---------------+ +--------------------+
-| Frontend | <----> | API (RAG Engine) |
-+---------------+ +--------------------+
-| |
-v v
-+---------------+ +----------------------+
-| Vector Store | | Legal Text Database |
-| (e.g., Qdrant)| | (e.g., GovInfo, |
-| | | CourtListener, ...)|
-+---------------+ +----------------------+
+```plaintext
++----------------+         +--------------------+
+|   Frontend     | <---->  |  Veritus API (RAG) |
++----------------+         +--------------------+
+        |                            |
+        v                            v
++----------------+       +-----------------------+
+|  Vector Store  |       | Legal Text Database   |
+| (Qdrant, etc.) |       | (GovInfo, CourtListener)|
++----------------+       +-----------------------+
 
-yaml
-Copy
-Edit
-
----
 
 ## 🛠 Tech Stack
 

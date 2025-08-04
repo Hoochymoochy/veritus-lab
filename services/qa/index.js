@@ -13,7 +13,7 @@ const summarizeText = async (items, question) => {
   const prompt = `You’re a sharp legal AI. Based on the data below, provide a clear, concise final summary answering this question:
   \n"${question}"\n\n${flatSummaries}`;
 
-  const response = await axios.post('http://ollama:11434/api/generate', {
+  const response = await axios.post('http://ollama_model:11434/api/generate', {
     model: 'phi3', // Use the actual name used in `ollama list`
     prompt: prompt,
     stream: false
@@ -25,13 +25,17 @@ const summarizeText = async (items, question) => {
 app.post('/final-response', async (req, res) => {
   const { chunks, question } = req.body;
 
+  
+
   if (!Array.isArray(chunks)) {
     return res.status(400).json({ error: 'Expected "chunks" to be an array' });
   }
 
   try {
     const finalSummary = await summarizeText(chunks, question);
-    res.json({ summary: finalSummary });
+    const urls = chunks.map(item => item.url);
+    res.json({ summary: finalSummary, url: urls});
+
   } catch (err) {
     console.error('🔥 Summarizer error:', err.message);
     res.status(500).json({ error: 'Failed to summarize all chunks' });

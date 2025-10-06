@@ -3,14 +3,29 @@ import axios from "axios";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 
+// helper: format item into a clean citation
+function formatCitation(item) {
+  // try to extract section id from item_id ("title-73_chap-18_sec-15.5")
+  const sectionMatch = item.item_id?.match(/title-(\d+)_chap-(\d+)_sec-(.+)/);
+  let cite = "";
+  if (sectionMatch) {
+    cite = `Utah Code §${sectionMatch[1]}-${sectionMatch[2]}-${sectionMatch[3]}`;
+  } else {
+    cite = item.section || "Unknown Section";
+  }
+
+  return `According to ${cite} ([source](${item.url})): ${item.summary}`;
+}
+
 export async function finalResponse(items, question, context) {
   if (!Array.isArray(items)) {
     throw new Error('Expected "items" to be an array');
   }
 
-  const flatSummaries = items
-    .map(item => `• ${item.section || "Unknown Section"}: ${item.summary || item.text || ""}`)
-    .join("\n");
+  // Format retrieved items into smooth citations
+  const flatSummaries = items.map(formatCitation).join("\n\n");
+
+  console.log(flatSummaries);
 
   const convoBits = [
     `First Question: ${context.firstQuestion || "N/A"}`,
@@ -20,16 +35,25 @@ export async function finalResponse(items, question, context) {
   ].join("\n");
 
   const prompt = `
-You are a sharp legal AI. Based on the retrieved sections + chat context, answer clearly:
+  You are VERITUS — a precise, citation-backed AI legal analyst.
 
-❓ Question: "${question}"
+  🎯 Rules:
+  - Respond strictly using the retrieved laws.
+  - If something's missing, say: "The retrieved sections do not cover this."
+  - Keep it tight (1–3 sentences).
+  - Cite like: "According to [Jurisdiction Code §title-chapter-section]([source](url)), …"
+  - Never fabricate codes.
 
-📚 Retrieved Sections:
-${flatSummaries}
+  ❓ User Question:
+  "${question}"
 
-💬 Conversation Context:
-${convoBits}
+  📚 Retrieved Sections:
+  ${flatSummaries}
+
+  🧩 Context (for style/tone awareness only):
+  ${convoBits}
   `;
+
 
   const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
     model: "phi3", // swap to your local model

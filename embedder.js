@@ -33,10 +33,15 @@ async function embedText(text) {
 }
 
 // 🔍 Search Pinecone
-export async function embedAndSearch(query, namespace = "") {
-  if (!query) throw new Error("Query is required");
+export async function embedAndSearch(query, namespace = "", context = "") {
+  if (!query) throw new Error("Query is required")
 
-  const queryVector = await embedText(query);
+  // 🧩 Fuse context + new query
+  const fullPrompt = context 
+    ? `Context: ${context}\nUser Question: ${query}`
+    : query
+
+  const queryVector = await embedText(fullPrompt)
 
   const queryRequest = {
     vector: queryVector,
@@ -44,11 +49,12 @@ export async function embedAndSearch(query, namespace = "") {
     includeValues: false,
     topK: 5,
     ...(namespace && { namespace }),
-  };
+  }
 
-  const result = await index.query(queryRequest);
-  return result.matches.map(m => ({ score: m.score, ...m.metadata }));
+  const result = await index.query(queryRequest)
+  return result.matches.map(m => ({ score: m.score, ...m.metadata }))
 }
+
 
 // 📦 Embed + Store in Pinecone
 export async function embedAndStore(input, metadata = {}, namespace = "") {

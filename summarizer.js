@@ -1,99 +1,88 @@
-// 📝 Batch Summarizer Module — Veritus style
 import axios from "axios";
 import { fetchMessages, upsertSummary, setSummarized } from "./chat.js";
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 
-// Single section summarizer
-async function summarizeText(text) {
-  if (!text || text.trim() === "") return null; // handle empty text gracefully
+// Single section summarizer with streaming
+export async function summarizeText(text, onToken) {
+  if (!text || text.trim() === "") return null;
 
   const prompt = `
 You are a professional legal summarizer. Summarize the following conversation or legal text into a concise, clear, narrative-style summary.
 - Focus on clarity and key points.
-- Avoid creating a list; make it flow naturally.
+- Avoid lists; make it flow naturally.
 - Keep it readable for someone without prior context.
-- Highlight decisions, questions, or important information.
+- Highlight decisions, questions, or important info.
 
-Text to summarize:
+Text:
 """${text}"""
   `;
 
-  const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
-    model: "mistral",
-    prompt,
-    stream: false,
-  });
+  const response = await axios.post(
+    `${OLLAMA_URL}/api/generate`,
+    { model: "mistral", prompt, stream: true },
+    { responseType: "stream" }
+  );
 
-  return response.data.response || null;
+  let buffer = "";
+  for await (const chunk of response.data) {
+    buffer += chunk.toString();
+    const parts = buffer.split("\n").filter(Boolean);
+
+    for (let i = 0; i < parts.length; i++) {
+      const line = parts[i].replace(/^data:\s*/, "").trim();
+      if (!line) continue;
+
+      if (line === "[DONE]") {
+        onToken("[DONE]");
+        return;
+      }
+
+      try {
+        const json = JSON.parse(line);
+        if (json.response) onToken(json.response);
+      } catch {
+        buffer = line; // partial JSON
+      }
+    }
+    buffer = "";
+  }
+
+  onToken("[DONE]");
 }
 
 // Summarize conversation
-async function summarizeConversation(userMessages, aiMessages) {
-  if ((!userMessages || !userMessages.length) && (!aiMessages || !aiMessages.length)) {
-    return null; // no messages to summarize
-  }
+export async function summarizeConversation(userMessages, aiMessages, onToken) {
+  if ((!userMessages || !userMessages.length) && (!aiMessages || !aiMessages.length)) return null;
 
   const text = [
     ...(userMessages || []).map(m => `User: ${m.message}`),
     ...(aiMessages || []).map(m => `AI: ${m.message}`)
   ].join("\n");
 
-  return summarizeText(text);
+  return summarizeText(text, onToken);
 }
 
-export async function buildContext(id) {
+// Build chat context with summary
+export async function buildContext(id, onToken = () => {}) {
   const allMessages = await fetchMessages(id) || [];
-
-  // grab last 6 messages regardless of sender (or empty if chat just started)
   const lastSix = allMessages.slice(-6);
-  const userMessages = lastSix.filter(m => m.sender === "user") || [];
-  const aiMessages = lastSix.filter(m => m.sender === "ai") || [];
+  const userMessages = lastSix.filter(m => m.sender === "user");
+  const aiMessages = lastSix.filter(m => m.sender === "ai");
 
-  // check if messages need summary
   const needsSummary = lastSix.some(m => !m.is_summarized);
-
   let summary = null;
+
   if (needsSummary && (userMessages.length || aiMessages.length)) {
-    summary = await summarizeConversation(userMessages, aiMessages);
+    summary = await summarizeConversation(userMessages, aiMessages, onToken);
 
     if (summary) {
       await upsertSummary(id, summary);
-      for (const msg of lastSix) {
-        await setSummarized(msg.id);
-      }
+      for (const msg of lastSix) await setSummarized(msg.id);
     }
   }
 
   const firstQuestion = allMessages.find(m => m.sender === "user")?.message || null;
 
-  return {
-    firstQuestion,
-    userMessages,
-    aiMessages,
-    summary,
-  };
-}
-
-// Batch summarizer
-export async function summarizeBatch(chunks) {
-  if (!Array.isArray(chunks)) {
-    throw new Error('Expected "chunks" to be an array');
-  }
-
-  const summaries = await Promise.all(
-    chunks.map(async (item) => {
-      const summary = await summarizeText(item.raw_text || "");
-      return {
-        item_id: item.item_id,
-        title: item.title,
-        section: item.section,
-        url: item.url,
-        score: item.score ?? null,
-        summary,
-      };
-    })
-  );
-
-  return summaries;
+  return { firstQuestion, userMessages, aiMessages, summary };
 }

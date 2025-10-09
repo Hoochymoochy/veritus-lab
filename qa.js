@@ -14,7 +14,7 @@ function formatCitation(item) {
     cite = item.section || "Unknown Section";
   }
 
-  return `According to ${cite} ([source](${item.url})): ${item.summary}`;
+  return `According to ${cite} ([source](${item.url})): ${item.raw_text}`;
 }
 
 export async function finalResponse(items, question, context) {
@@ -25,8 +25,6 @@ export async function finalResponse(items, question, context) {
   // Format retrieved items into smooth citations
   const flatSummaries = items.map(formatCitation).join("\n\n");
 
-  console.log(flatSummaries);
-
   const convoBits = [
     `First Question: ${context.firstQuestion || "N/A"}`,
     `Recent User: ${context.userMessages.map(m => m.message).join(" | ")}`,
@@ -34,14 +32,22 @@ export async function finalResponse(items, question, context) {
     context.summary ? `Batch Summary: ${context.summary}` : "",
   ].join("\n");
 
+  const groundingRule = `
+    IMPORTANT: You must quote or paraphrase ONLY from the retrieved sections below.
+    If a question cannot be answered directly using these retrieved laws, reply:
+    "The retrieved sections do not cover this directly."
+    Do NOT infer, expand, or reference any other Utah Code section or case law not explicitly included.
+    `;
+
+
   const prompt = `
   You are VERITUS — a precise, citation-backed AI legal analyst.
+  ${groundingRule}
 
-  🎯 Rules:
-  - Respond strictly using the retrieved laws.
-  - If something's missing, say: "The retrieved sections do not cover this."
-  - Keep it tight (1–3 sentences).
-  - Cite like: "According to [Jurisdiction Code §title-chapter-section]([source](url)), …"
+  🎯 Rules: 
+  - Respond strictly using the retrieved laws. 
+  - If something's missing, say: "The retrieved sections do not cover this." 
+  - Keep it tight (1–3 sentences). - Cite like: "According to [Jurisdiction Code §title-chapter-section]([source](url)), …" 
   - Never fabricate codes.
 
   ❓ User Question:

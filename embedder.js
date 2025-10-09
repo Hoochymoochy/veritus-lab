@@ -1,30 +1,20 @@
-// 🔥 Embedding + Pinecone Module (no HTTP)
-// Clean + Modular — Veritus style.
-
-//TODO have the namespcae link with country_city so it can be filtered on the root index we will call law. for now using "" will look throught all data in index
-
 import axios from "axios";
 import { Pinecone } from "@pinecone-database/pinecone";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
+import { finalResponse } from "./finalResponse.js"; // streaming AI function
 
 dotenv.config();
 
-// 🌍 Env Checks
 const { PINECONE_API_KEY, PINECONE_INDEX, OLLAMA_URL } = process.env;
+if (!PINECONE_API_KEY || !PINECONE_INDEX) throw new Error("❌ Missing Pinecone env vars.");
 
-if (!PINECONE_API_KEY || !PINECONE_INDEX) {
-  throw new Error("❌ Missing required Pinecone env vars.");
-}
-
-// 🔐 Pinecone Init
 const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
 const index = pinecone.index(PINECONE_INDEX);
-
-// ⚡ Helpers
 const getOllamaUrl = () => OLLAMA_URL || "http://localhost:11434";
 
-async function embedText(text) {
+// ⚡ Core embedding
+export async function embedText(text) {
   const { data } = await axios.post(`${getOllamaUrl()}/api/embeddings`, {
     model: "nomic-embed-text",
     prompt: text,
@@ -32,108 +22,73 @@ async function embedText(text) {
   return data.embedding;
 }
 
-// 🔍 Search Pinecone
-export async function embedAndSearch(query, namespace = "", context = "") {
-  if (!query) throw new Error("Query is required")
+// 🔍 Pinecone search
+export async function embedAndSearch(query, namespace = "", context = {}) {
+  if (!query) throw new Error("Query required");
 
-  // 🧩 Fuse context + new query
-  const fullPrompt = context 
-    ? `Context: ${context}\nUser Question: ${query}`
-    : query
+  let contextText = "";
+  if (context) {
+    const { summary, userMessages, aiMessages } = context;
+    contextText = summary ? `Summary:\n${summary}\n` : "";
+    if (userMessages?.length || aiMessages?.length) {
+      contextText += [
+        ...(userMessages || []).map(m => `User: ${m.message}`),
+        ...(aiMessages || []).map(m => `AI: ${m.message}`)
+      ].join("\n");
+    }
+  }
 
-  const queryVector = await embedText(fullPrompt)
+  const fullPrompt = contextText ? `Context:\n${contextText}\nUser Question: ${query}` : query;
+  const queryVector = await embedText(fullPrompt);
 
-  const queryRequest = {
+  const result = await index.query({
     vector: queryVector,
     includeMetadata: true,
     includeValues: false,
     topK: 5,
     ...(namespace && { namespace }),
-  }
+  });
 
-  const result = await index.query(queryRequest)
-  return result.matches.map(m => ({ score: m.score, ...m.metadata }))
+  return result.matches.map(m => ({ score: m.score, ...m.metadata }));
 }
 
-
-// 📦 Embed + Store in Pinecone
+// 📦 Store embeddings
 export async function embedAndStore(input, metadata = {}, namespace = "") {
-  if (!input) throw new Error("Input text is required");
-
   const vector = await embedText(input);
   const id = uuidv4();
 
-  await index.upsert(
-    [
-      {
-        id,
-        values: vector,
-        metadata: { text: input, ...metadata },
-      },
-    ],
-    namespace ? { namespace } : {}
-  );
-
+  await index.upsert([{ id, values: vector, metadata: { text: input, ...metadata } }], 
+                     namespace ? { namespace } : {});
   return { id, success: true };
 }
 
-// 📂 Bulk Upload JSON
-export async function bulkUploadJson(json, namespace = "") {
-  if (!Array.isArray(json)) throw new Error("JSON must be an array");
+// 🏎 Incremental embedding + streaming
+export async function incrementalEmbedAndStream(texts, query, chatContext, onToken) {
+  const contextChunks = [];
 
-  const results = [];
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i];
+    const vector = await embedText(text);
+    contextChunks.push({ text, vector });
 
-  for (let i = 0; i < json.length; i++) {
-    const item = json[i];
-    const input =
-      item.input ||
-      item.text ||
-      item.content ||
-      item.metadata?.text ||
-      item.body ||
-      item.description ||
-      item.section;
-
-    if (!input) {
-      results.push({ success: false, error: "No text content found", item: i });
-      continue;
-    }
-
-    try {
-      const vector = await embedText(input);
-      const id = uuidv4();
-
-      await index.upsert(
-        [
-          {
-            id,
-            values: vector,
-            metadata: { ...item.metadata, raw_text: input, source: "json_upload" },
-          },
-        ],
-        namespace ? { namespace } : {}
-      );
-
-      results.push({ success: true, id, text: input.slice(0, 100) });
-    } catch (err) {
-      results.push({ success: false, error: err.message, text: input.slice(0, 100) });
+    if (contextChunks.length === 1) {
+      finalResponse(contextChunks, query, chatContext, onToken).catch(err => {
+        console.error("🔥 Stream error:", err);
+      });
     }
   }
 
-  const successCount = results.filter(r => r.success).length;
-  return {
-    message: `Uploaded ${successCount}/${json.length} items successfully`,
-    results: results.slice(0, 10), // preview only
-    summary: { total: json.length, successful: successCount, failed: json.length - successCount },
-  };
+  if (contextChunks.length > 1) {
+    await finalResponse(contextChunks, query, chatContext, onToken);
+  }
 }
 
-// 💚 Health
+// 💚 Health check
 export async function healthCheck() {
   return { status: "ok", timestamp: new Date().toISOString() };
 }
 
-// 🔗 Ollama Test
+// 🔗 Ollama test
 export async function testOllama() {
   try {
     const { data } = await axios.post(`${getOllamaUrl()}/api/embeddings`, {

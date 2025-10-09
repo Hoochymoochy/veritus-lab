@@ -1,49 +1,47 @@
-import express from 'express'
-import cors from 'cors'
-import { embedAndSearch } from './embedder.js'
-import { summarizeBatch, buildContext } from './summarizer.js'
-import { finalResponse } from './qa.js'
+import express from 'express';
+import cors from 'cors';
+import { embedAndSearch, incrementalEmbedAndStream } from './embedder.js';
+import { buildContext } from './summarizer.js';
 
-const app = express()
-app.use(express.json())
-app.use(cors())
+const app = express();
+app.use(express.json());
+app.use(cors());
 
 app.post('/ask', async (req, res) => {
-  const { query, id } = req.body
+  const { query, id } = req.body;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
 
   try {
-    // 1️⃣ Grab previous context (chat history or summary)
-    const chatContext = await buildContext(id)
+    const chatContext = await buildContext(id);
 
-    // 2️⃣ Search Pinecone with context-fused embedding
-    const chunks = await embedAndSearch(query, "", chatContext)
+    const chunks = await embedAndSearch(query, "", chatContext);
 
     if (!Array.isArray(chunks)) {
-      return res.status(400).json({ error: '❌ Embedder did not return an array of chunks' })
+      res.write(`data: ${JSON.stringify({ error: "Bad chunks" })}\n\n`);
+      return res.end();
     }
 
-    console.log('📦 Retrieved Chunks:', chunks.length)
+    // 🏎 Stream AI response as embeddings are processed
+    await incrementalEmbedAndStream(
+      chunks.map(c => c.text || c.raw_text),
+      query,
+      chatContext,
+      (token) => {
+        res.write(`data: ${JSON.stringify({ token })}\n\n`);
+        if (token === "[DONE]") res.end();
+      }
+    );
 
-    // 3️⃣ Summarize retrieved info
-    const summary = await summarizeBatch(chunks)
-
-    console.log('📝 Chunks Summary finish')
-  
-
-    // 4️⃣ Ask LLM with contextual blend
-    const answer = await finalResponse(summary, query, chatContext)
-
-    console.log('📝 Final Answer finish')
-
-    res.json({ summary, answer })
   } catch (err) {
-    console.error('🔥 Orchestrator Error:', err.message)
-    res.status(500).json({ error: 'Something broke in the orchestration flow.' })
+    console.error('🔥 Orchestrator Error:', err.message);
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    res.end();
   }
-})
-
-
+});
 
 app.listen(4000, "0.0.0.0", () => {
-  console.log('🧠 Veritus-Lab orchestrator cookin’ on port 4000')
-})
+  console.log('🧠 Veritus-Lab orchestrator running on port 4000');
+});

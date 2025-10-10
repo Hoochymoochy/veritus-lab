@@ -13,15 +13,22 @@ export async function finalResponse(chunks, query, chatContext, onToken) {
   const contextText = chunks.map(c => c.text || c.raw_text || "").join("\n");
   const summaryText = chatContext.summary ? `Summary:\n${chatContext.summary}\n` : "";
 
-  const prompt = `
+const prompt = `
 You are a professional legal AI assistant. Use the context below to answer the user's question clearly and concisely.
+
+- If the context includes a URL, include it at the end of your answer in Markdown link format like: [View Law Here](https://example.com)
+- Do NOT make up URLs. Only use those provided in context.
+- Keep your response structured and human-readable.
 
 Context:
 ${summaryText}${contextText}
 
 User Question: ${query}
-Answer in a narrative style, highlighting important decisions or info. Stream token by token.
-  `;
+
+Answer in a narrative style, highlighting important legal details.
+Stream token by token.
+`
+;
 
   const response = await axios.post(
     `${OLLAMA_URL}/api/generate`,

@@ -24,9 +24,12 @@ app.post('/ask', async (req, res) => {
       return res.end();
     }
 
+
     // 🏎 Stream AI response as embeddings are processed
     await incrementalEmbedAndStream(
-      chunks.map(c => c.text || c.raw_text),
+      chunks.map(c => {
+      const meta = `Source: ${c.chapter || c.title || "Unknown"}\nSection: ${c.section || "N/A"}\nURL: ${c.url || "N/A"}\n\n`
+      return meta + (c.text || c.raw_text || "")}),
       query,
       chatContext,
       (token) => {
@@ -44,4 +47,12 @@ app.post('/ask', async (req, res) => {
 
 app.listen(4000, "0.0.0.0", () => {
   console.log('🧠 Veritus-Lab orchestrator running on port 4000');
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    message: "Backend streaming ready ✅",
+  });
 });

@@ -1,6 +1,7 @@
 # === Core server ===
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
+
 httpx==0.27.0
 python-dotenv==1.0.1
 
@@ -15,16 +16,9 @@ supabase==2.5.1
 
 # === Utilities ===
 uuid==1.30
+aiohttp==3.9.9
 regex==2024.9.11
 
 # === Optional: if you use pandas/numpy for data cleanup ===
 numpy>=1.26.0
 pandas>=2.2.0
-
-# === Web scraping (if you’re scraping Brazilian laws) ===
-beautifulsoup4==4.12.3
-lxml==5.2.2
-requests==2.32.3
-
-
-aiohttp

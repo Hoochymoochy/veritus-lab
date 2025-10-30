@@ -37,154 +37,238 @@ def init_pinecone():
 index = init_pinecone()
 
 
-def insert_pinecone_index(scraper_result):
+def search_legal_docs(
+    query_text,
+    top_k=8,
+    context=None,
+    country=None,
+    state=None,
+    filter_dict=None
+):
     """
-    Insert embedded legal documents into Pinecone.
-    
+    🔎 Search legal documents with contextual precision and query enhancement.
+
     Args:
-        scraper_result: Dictionary from embed() with structure:
-            {
-                "title": "Document Title",
-                "type": "constitution/law/etc",
-                "jurisdiction": "federal/state",
-                "source": "https://...",
-                "embeddings": torch.Tensor (shape: [num_chunks, 1024]),
-                "embedded_texts": ["chunk1", "chunk2", ...],
-                "embedding_metadata": [
-                    {
-                        "document": "...",
-                        "section": "...",
-                        "article": "1",
-                        "text": "...",
-                        "type": "...",
-                        "jurisdiction": "...",
-                        "source": "..."
-                    },
-                    ...
-                ],
-                "embedding_count": 123
-            }
+        query_text (str): The legal or natural language query.
+        top_k (int): Max number of matches to return.
+        context (str): Chat history/context to enrich the query.
+        country (str): Country code or name (for jurisdiction filtering).
+        state (str): State or region (for finer jurisdiction).
+        filter_dict (dict): Optional Pinecone filter overrides.
+
+    Returns:
+        list[dict]: Ranked and formatted search matches.
     """
     try:
-        if not scraper_result or 'embeddings' not in scraper_result:
-            print("⚠️ No embeddings found in scraper_result")
-            return False
+        # --- Build dynamic filters ---
+        filters = {}
+
+        if country:
+            filters["country"] = {"$eq": country.lower()}
+        if state:
+            filters["state"] = {"$eq": state.lower()}
+
+        # Merge any manual filter overrides
+        if filter_dict:
+            filters.update(filter_dict)
+
+        # --- Enhanced query with context ---
+        enhanced_query = query_text
         
-        embeddings = scraper_result['embeddings']
-        embedded_texts = scraper_result.get('embedded_texts', [])
-        metadata_list = scraper_result.get('embedding_metadata', [])
-        doc_title = scraper_result.get('title', 'Unknown Document')
-        
-        # Convert PyTorch tensor to list
-        if isinstance(embeddings, torch.Tensor):
-            embeddings = embeddings.cpu().numpy().tolist()
-        
-        # Validate dimensions
-        if len(embeddings) != len(embedded_texts) or len(embeddings) != len(metadata_list):
-            print(f"⚠️ Dimension mismatch: {len(embeddings)} embeddings, {len(embedded_texts)} texts, {len(metadata_list)} metadata")
-            return False
-        
-        print(f"\n📤 Uploading to Pinecone: {doc_title}")
-        print(f"   📊 Preparing {len(embeddings)} vectors")
-        
-        # Build vectors in Pinecone format
-        vectors = []
-        for idx, (embedding, text, metadata) in enumerate(zip(embeddings, embedded_texts, metadata_list)):
-            # Create unique ID using document name and article number
-            doc_name_clean = metadata.get('document', doc_title).replace(' ', '_').replace('/', '_')
-            article_num = metadata.get('article', 'NA')
-            vector_id = f"{doc_name_clean}_art{article_num}_{idx}"
+        if context:
+            # Extract key legal terms and entities from context
+            context_snippet = context[-500:] if len(context) > 500 else context
             
-            # Prepare metadata for Pinecone (keep under 40KB limit)
-            pinecone_metadata = {
-                'document': str(metadata.get('document', ''))[:200],
-                'article': str(metadata.get('article', 'N/A')),
-                'section': str(metadata.get('section', ''))[:100],
-                'type': str(metadata.get('type', ''))[:50],
-                'jurisdiction': str(metadata.get('jurisdiction', ''))[:50],
-                'source': str(metadata.get('source', ''))[:300],
-                'text': str(metadata.get('text', ''))[:1000],  # Truncate for size
-                'chunk_index': idx
-            }
+            # Create a context-aware query (prioritize current query)
+            enhanced_query = f"{query_text}\n\nRelated context: {context_snippet}"
             
-            vectors.append({
-                'id': vector_id,
-                'values': embedding,
-                'metadata': pinecone_metadata
+            print(f"🧠 Context-enhanced query created (length: {len(enhanced_query)})")
+
+        # --- Embed the enhanced query ---
+        query_embedding = model.encode([enhanced_query], convert_to_tensor=True)
+        query_vector = query_embedding.cpu().numpy().tolist()[0]
+
+        # --- Query Pinecone with higher top_k for reranking ---
+        search_k = top_k * 2 if context else top_k
+        
+        results = index.query(
+            vector=query_vector,
+            top_k=search_k,
+            include_metadata=True,
+            filter=filters or None,
+        )
+
+        matches = []
+        print(f"\n🧭 Contextual Search for: '{query_text}' [{country}/{state}]\n")
+
+        for i, match in enumerate(results.get("matches", []), 1):
+            metadata = match.get("metadata", {})
+            score = float(match.get("score", 0))
+            jurisdiction = (
+                f"{metadata.get('country', '')}/{metadata.get('state', '')}".strip("/")
+            )
+            snippet = metadata.get("text", "")[:220].replace("\n", " ")
+
+            if i <= top_k or not context:  # Only print top_k results
+                print(f"{i}. {metadata.get('title', 'Unknown')} [Score: {score:.3f}]")
+                print(f"   Jurisdiction: {jurisdiction or 'N/A'}")
+                print(f"   Type: {metadata.get('type', 'N/A')}")
+                print(f"   Snippet: {snippet}...")
+                print(f"   Source: {metadata.get('source', 'N/A')}\n")
+
+            matches.append({
+                "id": match.get("id"),
+                "score": score,
+                "metadata": metadata,
+                "text": metadata.get("text", ""),
+                "title": metadata.get("title", "Unknown"),
+                "chapter": metadata.get("chapter"),
+                "section": metadata.get("section"),
             })
-        
-        if not vectors:
-            print("⚠️ No vectors to insert")
-            return False
-        
-        # Upsert to Pinecone in batches of 100
-        batch_size = 100
-        total_batches = (len(vectors) - 1) // batch_size + 1
-        
-        for i in range(0, len(vectors), batch_size):
-            batch = vectors[i:i + batch_size]
-            index.upsert(vectors=batch)
-            batch_num = i // batch_size + 1
-            print(f"   ✅ Batch {batch_num}/{total_batches}: {len(batch)} vectors")
-        
-        print(f"   🎉 Successfully inserted {len(vectors)} vectors for {doc_title}\n")
-        return True
-        
+
+        # --- Context-aware reranking ---
+        if context and len(matches) > top_k:
+            print("🔄 Applying context-aware reranking...")
+            
+            from difflib import SequenceMatcher
+            
+            # Extract keywords from original query and context
+            query_keywords = set(query_text.lower().split())
+            context_keywords = set(context.lower().split()) if context else set()
+            
+            def context_boost(m):
+                base_score = m["score"]
+                text = m.get("text", "").lower()
+                
+                # Keyword overlap with query (high weight)
+                query_overlap = len(query_keywords & set(text.split())) / max(len(query_keywords), 1)
+                
+                # Keyword overlap with context (medium weight)
+                context_overlap = len(context_keywords & set(text.split())) / max(len(context_keywords), 1)
+                
+                # Text similarity with query
+                text_sim = SequenceMatcher(None, query_text.lower(), text[:500]).ratio()
+                
+                # Combined boost
+                boost_factor = (
+                    1 + 
+                    (query_overlap * 0.3) + 
+                    (context_overlap * 0.15) + 
+                    (text_sim * 0.1)
+                )
+                
+                return base_score * boost_factor
+            
+            matches.sort(key=context_boost, reverse=True)
+            matches = matches[:top_k]
+            
+            print(f"✅ Reranked to top {top_k} context-relevant results\n")
+
+        return matches
+
     except Exception as e:
-        print(f"❌ Pinecone insertion error: {e}")
+        print(f"❌ Search error: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return []
 
 
-def search_legal_docs(query_text, top_k=5, filter_dict=None):
+# --- Alternative: Two-stage retrieval for better context usage ---
+
+def search_legal_docs_two_stage(
+    query_text,
+    top_k=8,
+    context=None,
+    country=None,
+    state=None,
+    filter_dict=None
+):
     """
-    Search legal documents using semantic similarity.
-    
-    Args:
-        query_text: Search query string
-        top_k: Number of results to return
-        filter_dict: Optional Pinecone filter, e.g., {"type": "constitution"}
-    
-    Returns:
-        List of matching results with metadata
+    🔎 Two-stage search: first pass with context, second pass with original query.
+    Combines results for better context-aware retrieval.
     """
-    
     try:
-        # Embed the query using the same model
-        query_embedding = model.encode([query_text], convert_to_tensor=True)
-        query_embedding = query_embedding.cpu().numpy().tolist()[0]
+        filters = {}
+        if country:
+            filters["country"] = {"$eq": country.lower()}
+        if state:
+            filters["state"] = {"$eq": state.lower()}
+        if filter_dict:
+            filters.update(filter_dict)
+
+        all_matches = {}  # Use dict to deduplicate by ID
         
-        # Search Pinecone
-        results = index.query(
-            vector=query_embedding,
+        # --- Stage 1: Context-enhanced search ---
+        if context:
+            context_snippet = context[-400:] if len(context) > 400 else context
+            enhanced_query = f"{query_text}. Previous discussion: {context_snippet}"
+            
+            print("🔍 Stage 1: Context-enhanced search...")
+            context_embedding = model.encode([enhanced_query], convert_to_tensor=True)
+            context_vector = context_embedding.cpu().numpy().tolist()[0]
+            
+            context_results = index.query(
+                vector=context_vector,
+                top_k=top_k,
+                include_metadata=True,
+                filter=filters or None,
+            )
+            
+            for match in context_results.get("matches", []):
+                match_id = match.get("id")
+                all_matches[match_id] = {
+                    "id": match_id,
+                    "score": float(match.get("score", 0)) * 1.1,  # Boost context matches
+                    "metadata": match.get("metadata", {}),
+                    "text": match.get("metadata", {}).get("text", ""),
+                    "title": match.get("metadata", {}).get("title", "Unknown"),
+                    "chapter": match.get("metadata", {}).get("chapter"),
+                    "section": match.get("metadata", {}).get("section"),
+                    "source": "context"
+                }
+        
+        # --- Stage 2: Original query search ---
+        print("🔍 Stage 2: Direct query search...")
+        query_embedding = model.encode([query_text], convert_to_tensor=True)
+        query_vector = query_embedding.cpu().numpy().tolist()[0]
+        
+        query_results = index.query(
+            vector=query_vector,
             top_k=top_k,
             include_metadata=True,
-            filter=filter_dict
+            filter=filters or None,
         )
         
-        # Format and display results
-        print(f"\n🔍 Search results for: '{query_text}'\n")
-        matches = []
+        for match in query_results.get("matches", []):
+            match_id = match.get("id")
+            if match_id in all_matches:
+                # Average the scores if found in both stages
+                all_matches[match_id]["score"] = (
+                    all_matches[match_id]["score"] + float(match.get("score", 0))
+                ) / 2
+                all_matches[match_id]["source"] = "both"
+            else:
+                all_matches[match_id] = {
+                    "id": match_id,
+                    "score": float(match.get("score", 0)),
+                    "metadata": match.get("metadata", {}),
+                    "text": match.get("metadata", {}).get("text", ""),
+                    "title": match.get("metadata", {}).get("title", "Unknown"),
+                    "chapter": match.get("metadata", {}).get("chapter"),
+                    "section": match.get("metadata", {}).get("section"),
+                    "source": "query"
+                }
         
-        for i, match in enumerate(results.get('matches', []), 1):
-            metadata = match.get('metadata', {})
-            score = match.get('score', 0)
-            
-            print(f"{i}. Article {metadata.get('article', 'N/A')} [Score: {score:.3f}]")
-            print(f"   Document: {metadata.get('document', 'Unknown')}")
-            print(f"   Type: {metadata.get('type', 'N/A')} | Jurisdiction: {metadata.get('jurisdiction', 'N/A')}")
-            print(f"   Text: {metadata.get('text', '')[:200]}...")
-            print(f"   Source: {metadata.get('source', 'N/A')}\n")
-            
-            matches.append({
-                'id': match.get('id'),
-                'score': score,
-                'metadata': metadata
-            })
+        # Sort by score and return top_k
+        matches = sorted(all_matches.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+        
+        print(f"\n🧭 Combined Search Results: '{query_text}' [{country}/{state}]\n")
+        for i, match in enumerate(matches, 1):
+            print(f"{i}. {match.get('title')} [Score: {match['score']:.3f}] (Source: {match.get('source')})")
+            print(f"   Snippet: {match.get('text', '')[:200]}...\n")
         
         return matches
-        
+
     except Exception as e:
         print(f"❌ Search error: {e}")
         import traceback

@@ -14,7 +14,7 @@ async def ask(req: Request):
     body = await req.json()
     query = body.get("query")
     chat_id = body.get("id")
-    lang = body.get("lang", "en")
+    lang = body.get("lang")
     country = body.get("country")
     state = body.get("state")
 

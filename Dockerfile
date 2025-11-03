@@ -1,4 +1,5 @@
-FROM node:18-bullseye
+# --- Base image ---
+FROM python:3.11-slim
 
 # --- Install deps + Ollama ---
 RUN apt-get update && \
@@ -9,8 +10,8 @@ RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # --- App setup ---
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # --- Entrypoint script ---
@@ -41,8 +42,8 @@ for model in nomic-embed-text mistral phi3; do\n\
   fi\n\
 done\n\
 \n\
-# Start Node app (foreground)\n\
-exec node index.js\n\
+# Start Python app (foreground)\n\
+exec python main.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # --- Ports ---

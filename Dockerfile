@@ -1,52 +1,65 @@
-# --- Base image ---
-FROM python:3.11-slim
+# --- Base image (GPU ready) ---
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# --- Install deps + Ollama ---
+# --- System setup ---
 RUN apt-get update && \
-    apt-get install -y curl ca-certificates && \
+    apt-get install -y python3 python3-pip curl ca-certificates bash && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://ollama.com/install.sh | sh
+# --- Install Ollama ---
+RUN curl -fsSL https://ollama.com/install.sh | bash
 
 # --- App setup ---
 WORKDIR /app
+
+# Copy and install Python dependencies
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Install GPU-compatible PyTorch + rest of deps
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy app files
 COPY . .
 
 # --- Entrypoint script ---
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Start Ollama in background\n\
-ollama serve &\n\
-OLLAMA_PID=$!\n\
-\n\
-# Wait until Ollama is ready\n\
-for i in {1..30}; do\n\
-  if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then\n\
-    echo "✅ Ollama ready"\n\
-    break\n\
-  fi\n\
-  echo "Waiting for Ollama... ($i/30)"\n\
-  sleep 2\n\
-done\n\
-\n\
-# Pre-pull models\n\
-for model in nomic-embed-text mistral phi3; do\n\
-  if ! ollama list | grep -q "$model"; then\n\
-    echo "⬇️ Pulling $model..."\n\
-    ollama pull "$model"\n\
-  else\n\
-    echo "✔️ $model already present"\n\
-  fi\n\
-done\n\
-\n\
-# Start Python app (foreground)\n\
-exec python main.py\n\
-' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN cat << 'EOF' > /entrypoint.sh
+#!/bin/bash
+set -e
+
+# Start Ollama in background
+ollama serve &
+OLLAMA_PID=$!
+
+# Wait for Ollama to be ready
+for i in {1..30}; do
+  if curl -s http://localhost:11434/api/tags >/dev/null 2>&1; then
+    echo "✅ Ollama ready"
+    break
+  fi
+  echo "Waiting for Ollama... ($i/30)"
+  sleep 2
+done
+
+# Pre-pull models
+for model in mistral; do
+  if ! ollama list | grep -q "$model"; then
+    echo "⬇️ Pulling $model..."
+    ollama pull "$model"
+  else
+    echo "✔️ $model already present"
+  fi
+done
+
+# Launch the backend
+exec python3 main.py
+EOF
+
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # --- Ports ---
 EXPOSE 4000 11434
 
+# --- Run ---
 ENTRYPOINT ["/entrypoint.sh"]

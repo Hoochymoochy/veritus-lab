@@ -16,9 +16,6 @@ supabase==2.5.1
 
 # === Utilities ===
 uuid==1.30
-aiohttp==3.9.9
+aiohttp==3.10.5
 regex==2024.9.11
 
-# === Optional: if you use pandas/numpy for data cleanup ===
-numpy>=1.26.0
-pandas>=2.2.0

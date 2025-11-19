@@ -52,6 +52,9 @@ async def ask(req: Request):
                 if token == "[DONE]":
                     logging.info("✅ Stream finished cleanly")
                     break
+                if await req.is_disconnected():
+                    logging.info("❌ Client disconnected")
+                    break
 
         except Exception as e:
             err_trace = traceback.format_exc()

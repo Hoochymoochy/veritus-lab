@@ -358,3 +358,84 @@ async def build_context(chat_id, lang="en", on_token=lambda _: None):
         "aiMessages": ai_msgs,
         "summary": summary
     }
+
+async def stream_summary_dual(text: str, lang):
+    """
+    Stream a summary of the document in English or Portuguese based on user selection.
+    """
+    lang_instructions = {
+        "pt": {
+            "language": "português brasileiro",
+            "guidelines": """
+Diretrizes para o resumo:
+- Use linguagem clara e profissional em português
+- Organize em seções lógicas e detalhadas se o documento for extenso
+- Destaque as informações mais importantes primeiro
+- Mantenha o tom objetivo e informativo
+- Use bullet points quando apropriado para maior clareza
+"""
+        },
+        "en": {
+            "language": "English",
+            "guidelines": """
+Summary guidelines:
+- Use clear, professional English
+- Organize into logical sections if the document is lengthy
+- Highlight the most important information first
+- Maintain an objective and informative tone
+- Use bullet points when appropriate for clarity
+"""
+        }
+    }
+
+    lang_config = lang_instructions[lang]
+
+    if lang == "en":
+        prompt = f"""You are a professional document summarizer. Your task is to create a concise, well-structured summary in {lang_config['language']}.
+
+{lang_config['guidelines']}
+
+Document to summarize:
+{text}
+
+Provide a clear and comprehensive summary now:"""
+        lang_code = "en"
+    else:
+        prompt = f"""Você é um profissional em direito e ótimo em fazer resumos de documentos. Sua tarefa é criar um resumo conciso, bem estruturado e que explique todas as etapas detalhadamente do seguinte documento em {lang_config['language']}.
+
+{lang_config['guidelines']}
+
+Documento a ser resumido:
+{text}
+
+Forneça um resumo claro e abrangente agora:"""
+        lang_code = "pt"
+
+
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream(
+            "POST",
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "mistral",
+                "prompt": prompt,
+                "stream": True,
+                "options": {
+                    "temperature": 0.3,
+                    "top_p": 0.9,
+                    "num_predict": 512
+                }
+            },
+        ) as resp:
+            async for line in resp.aiter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    if "response" in data:
+                        yield "data: " + json.dumps({"lang": lang_code, "token": data["response"]}) + "\n\n"
+                    if data.get("done", False):
+                        yield "data: " + json.dumps({"lang": lang_code, "token": "[DONE]"}) + "\n\n"
+                        break
+                except json.JSONDecodeError:
+                    continue

@@ -1,5 +1,5 @@
 import os
-import pinecone
+from pinecone import Pinecone
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
@@ -13,12 +13,8 @@ def init_pinecone():
     api_key = os.getenv("PINECONE_API_KEY")
     index_name = os.getenv("PINECONE_INDEX_NAME")
 
-    # 🚀 Initialize Pinecone client
-    pinecone.init(api_key=api_key)
-
-    # 🔗 Connect to index
-    return pinecone.Index(index_name)
-
+    pc = Pinecone(api_key=api_key)
+    return pc.Index(index_name)
 
 index = init_pinecone()
 

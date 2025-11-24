@@ -1,12 +1,11 @@
 """
-LLM interaction service for generating responses and summaries.
+LLM interaction service using OpenAI API for generating responses and summaries.
 """
 import json
 import logging
-import httpx
-import aiohttp
+from openai import AsyncOpenAI
 from config import (
-    OLLAMA_URL, 
+    OPENAI_CONFIG,
     LLM_MODEL, 
     LLM_TEMPERATURE, 
     LLM_TOP_P, 
@@ -22,10 +21,17 @@ from prompts import (
 )
 from utils.chunk_processing import ensure_chunk_metadata, format_context_chunk
 
+# Initialize OpenAI client
+client = AsyncOpenAI(
+    api_key=OPENAI_CONFIG["api_key"],
+    project=OPENAI_CONFIG.get("project"),
+    organization=OPENAI_CONFIG.get("organization")
+)
+
 
 async def stream_final_response(chunks, query, chat_context, lang="en"):
     """
-    Streams AI response token-by-token using Ollama with enhanced legal reasoning.
+    Streams AI response token-by-token using OpenAI with enhanced legal reasoning.
     
     Args:
         chunks: List of document chunks with metadata
@@ -58,7 +64,7 @@ async def stream_final_response(chunks, query, chat_context, lang="en"):
         summary_label = "Conversation History Summary:" if lang == "en" else "Resumo do Histórico da Conversa:"
         summary_section = f"\n\n{summary_label}\n{chat_context.get('summary')}\n"
     
-    # Construct the full prompt
+    # Construct the user message
     question_label = "User Question:" if lang == "en" else "Pergunta do Usuário:"
     context_label = "Legal Context from Database:" if lang == "en" else "Contexto Legal do Banco de Dados:"
     instruction = "Your Response (following the mandatory format above):" if lang == "en" else "Sua Resposta (seguindo o formato obrigatório acima):"
@@ -66,9 +72,7 @@ async def stream_final_response(chunks, query, chat_context, lang="en"):
     # Add URL validation reminder
     url_warning = URL_VALIDATION_WARNING.get(lang, URL_VALIDATION_WARNING["en"])
     
-    prompt = f"""{system_prompt}
-
-{summary_section}
+    user_message = f"""{summary_section}
 
 📜 **{context_label}**
 {context_text}
@@ -80,40 +84,37 @@ async def stream_final_response(chunks, query, chat_context, lang="en"):
 🧠 **{instruction}**
 """
 
-    # Stream response from Ollama
-    async with httpx.AsyncClient(timeout=None) as client:
-        async with client.stream(
-            "POST",
-            f"{OLLAMA_URL}/api/generate",
-            json={
-                "model": LLM_MODEL,
-                "prompt": prompt,
-                "stream": True,
-                "options": {
-                    "temperature": LLM_TEMPERATURE,
-                    "top_p": LLM_TOP_P,
-                    "num_predict": LLM_MAX_TOKENS
-                }
-            },
-        ) as resp:
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                if line.strip() == "[DONE]":
-                    yield "[DONE]"
-                    break
-                try:
-                    data = json.loads(line.replace("data:", "").strip())
-                    if "response" in data:
-                        yield data["response"]
-                except Exception as e:
-                    logging.debug(f"Error parsing line: {e}")
-                    continue
+    try:
+        # Stream response from OpenAI
+        stream = await client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=LLM_TEMPERATURE,
+            top_p=LLM_TOP_P,
+            max_tokens=LLM_MAX_TOKENS,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+            
+            # Check if stream is done
+            if chunk.choices[0].finish_reason == "stop":
+                yield "[DONE]"
+                break
+                
+    except Exception as e:
+        logging.error(f"Error in stream_final_response: {e}")
+        yield f"[ERROR: {str(e)}]"
 
 
 async def summarize_text(text, on_token, lang="en"):
     """
-    Summarize text with language consistency.
+    Summarize text with language consistency using OpenAI.
     
     Args:
         text: Text to summarize
@@ -128,29 +129,28 @@ async def summarize_text(text, on_token, lang="en"):
 
     prompt = SUMMARIZATION_PROMPTS.get(lang, SUMMARIZATION_PROMPTS["en"]).format(text=text)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={
-                "model": LLM_MODEL,
-                "prompt": prompt,
-                "stream": True,
-                "options": {"temperature": SUMMARY_TEMPERATURE}
-            }
-        ) as resp:
-            async for line in resp.content:
-                if not line:
-                    continue
-                try:
-                    decoded = line.decode().strip()
-                    if decoded in ["", "[DONE]"]:
-                        await on_token("[DONE]")
-                        break
-                    data = json.loads(decoded.replace("data:", "").strip())
-                    if "response" in data:
-                        await on_token(data["response"])
-                except Exception:
-                    continue
+    try:
+        stream = await client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=SUMMARY_TEMPERATURE,
+            max_tokens=SUMMARY_MAX_TOKENS,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                await on_token(chunk.choices[0].delta.content)
+            
+            if chunk.choices[0].finish_reason == "stop":
+                await on_token("[DONE]")
+                break
+                
+    except Exception as e:
+        logging.error(f"Error in summarize_text: {e}")
+        await on_token(f"[ERROR: {str(e)}]")
 
 
 async def stream_summary_dual(text: str, lang):
@@ -187,30 +187,27 @@ Documento a ser resumido:
 Forneça um resumo claro e abrangente agora:"""
         lang_code = "pt"
 
-    async with httpx.AsyncClient(timeout=None) as client:
-        async with client.stream(
-            "POST",
-            f"{OLLAMA_URL}/api/generate",
-            json={
-                "model": LLM_MODEL,
-                "prompt": prompt,
-                "stream": True,
-                "options": {
-                    "temperature": LLM_TEMPERATURE,
-                    "top_p": LLM_TOP_P,
-                    "num_predict": SUMMARY_MAX_TOKENS
-                }
-            },
-        ) as resp:
-            async for line in resp.aiter_lines():
-                if not line.strip():
-                    continue
-                try:
-                    data = json.loads(line)
-                    if "response" in data:
-                        yield "data: " + json.dumps({"lang": lang_code, "token": data["response"]}) + "\n\n"
-                    if data.get("done", False):
-                        yield "data: " + json.dumps({"lang": lang_code, "token": "[DONE]"}) + "\n\n"
-                        break
-                except json.JSONDecodeError:
-                    continue
+    try:
+        stream = await client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=LLM_TEMPERATURE,
+            top_p=LLM_TOP_P,
+            max_tokens=SUMMARY_MAX_TOKENS,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                token = chunk.choices[0].delta.content
+                yield "data: " + json.dumps({"lang": lang_code, "token": token}) + "\n\n"
+            
+            if chunk.choices[0].finish_reason == "stop":
+                yield "data: " + json.dumps({"lang": lang_code, "token": "[DONE]"}) + "\n\n"
+                break
+                
+    except Exception as e:
+        logging.error(f"Error in stream_summary_dual: {e}")
+        yield "data: " + json.dumps({"lang": lang_code, "error": str(e)}) + "\n\n"

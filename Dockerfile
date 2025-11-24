@@ -19,6 +19,9 @@ COPY requirements.txt .
 # --- Install remaining deps ---
 RUN pip install --no-cache-dir -r requirements.txt
 
+# --- Preload SentenceTransformer model ---
+RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-large')"
+
 # Copy app
 COPY . .
 

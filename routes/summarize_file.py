@@ -3,8 +3,7 @@ from fastapi.responses import StreamingResponse
 import logging, json, traceback
 
 from services.extract import extract_text_from_file_bytes, clean_text
-from services.ai import stream_summary_dual
-
+from services.llm import stream_summary_dual
 
 router = APIRouter()
 
